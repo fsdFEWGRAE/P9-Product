@@ -105,12 +105,9 @@ client.on("messageCreate", async (msg) => {
     return;
   }
 
-  // =============================
-  // استقبال الصورة — يقبل أي صورة
-  // =============================
+  // استقبال الصورة — يقبل أي صورة + حتى لو كانت عدة صور
   if (expectingImage && msg.author.id === cachedAuthor) {
 
-    // لو ما فيه صورة → اطلب صورة فقط
     if (!msg.attachments.size) {
       msg.reply("⚠️ **ارسل صورة المنتج فقط، بدون نص.**");
       return;
@@ -118,8 +115,8 @@ client.on("messageCreate", async (msg) => {
 
     expectingImage = false;
 
-    // رابط الصورة
-    const image = msg.attachments.first().url;
+    // يأخذ أول صورة من بين المرفقات
+    const image = Array.from(msg.attachments.values())[0].url;
 
     const lines = cachedText.split("\n").map(l => l.trim()).filter(l => l.length > 0);
 
@@ -153,7 +150,7 @@ client.on("messageCreate", async (msg) => {
     if (current) sections.push(current);
 
     // =============================
-    // بناء الـ Embed
+    // Embed المنتج
     // =============================
     const embed = new EmbedBuilder()
       .setColor("#8A2BE2")
@@ -177,7 +174,6 @@ client.on("messageCreate", async (msg) => {
         .setURL(`https://discord.com/channels/${msg.guild.id}/1439600517063118989`)
     );
 
-    // إرسال الرسالة
     await msg.channel.send("@everyone @here");
 
     await msg.channel.send({
