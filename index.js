@@ -86,7 +86,7 @@ client.on("messageCreate", async (msg) => {
 client.on("messageCreate", async (msg) => {
   if (msg.author.bot) return;
 
-  // إذا كتب الأمر
+  // =============== خطوة 1: كتابة الأمر
   if (msg.content.startsWith("*product")) {
     expectingText = true;
     cachedAuthor = msg.author.id;
@@ -95,7 +95,7 @@ client.on("messageCreate", async (msg) => {
     return;
   }
 
-  // استقبال النص (بدون صورة)
+  // =============== خطوة 2: استقبال نص المنتج
   if (expectingText && msg.author.id === cachedAuthor && !msg.attachments.size) {
     cachedText = msg.content;
     expectingText = false;
@@ -105,18 +105,25 @@ client.on("messageCreate", async (msg) => {
     return;
   }
 
-  // استقبال الصورة — يقبل أي صورة + حتى لو كانت عدة صور
+  // =============== خطوة 3: استقبال الصورة — يقبل أي صورة
   if (expectingImage && msg.author.id === cachedAuthor) {
 
-    if (!msg.attachments.size) {
-      msg.reply("⚠️ **ارسل صورة المنتج فقط، بدون نص.**");
+    // التقاط الصورة من جميع الاحتمالات (attachments + embeds)
+    const attachmentImage = [...msg.attachments][0]?.[1]?.url;
+    const embedImage = msg.embeds?.[0]?.image?.url;
+
+    const image = attachmentImage || embedImage;
+
+    if (!image) {
+      msg.reply("⚠️ **لم يتم العثور على صورة — ارسل صورة بدون نص.**");
       return;
     }
 
     expectingImage = false;
 
-    // يأخذ أول صورة من بين المرفقات
-    const image = Array.from(msg.attachments.values())[0].url;
+    // =============================
+    // معالجة النص
+    // =============================
 
     const lines = cachedText.split("\n").map(l => l.trim()).filter(l => l.length > 0);
 
@@ -174,6 +181,7 @@ client.on("messageCreate", async (msg) => {
         .setURL(`https://discord.com/channels/${msg.guild.id}/1439600517063118989`)
     );
 
+    // إرسال الرسالة
     await msg.channel.send("@everyone @here");
 
     await msg.channel.send({
