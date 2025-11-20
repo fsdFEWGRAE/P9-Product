@@ -34,17 +34,17 @@ const client = new Client({
   ]
 });
 
-client.on("ready", () => {
+client.once("clientReady", () => {
   console.log(`Bot logged in as ${client.user.tag}`);
 });
 
 // =============================
-// نظام الجلسات لكل مستخدم
+// جلسات المستخدمين
 // =============================
 const sessions = new Map();
 
 // =============================
-// messageCreate الرئيسي
+// messageCreate
 // =============================
 client.on("messageCreate", async (msg) => {
   if (msg.author.bot) return;
@@ -52,64 +52,63 @@ client.on("messageCreate", async (msg) => {
   const userId = msg.author.id;
   const session = sessions.get(userId);
 
-  // ========== help ==========
+  // ===== HELP =====
   if (msg.content.toLowerCase() === "*help") {
-    const helpEmbed = new EmbedBuilder()
+    const embed = new EmbedBuilder()
       .setColor("#00A0FF")
       .setTitle("📘 HELP MENU — قائمة المساعدة")
-      .addFields(
-        {
-          name: "🔥 Products",
-          value: "`*product` — إرسال منتج بالرابط والصورة"
-        }
-      );
+      .addFields({
+        name: "🔥 Product System",
+        value: "`*product` — إرسال منتج بالرابط والصورة"
+      });
 
-    return msg.channel.send({ embeds: [helpEmbed] });
+    return msg.channel.send({ embeds: [embed] });
   }
 
-  // ========== بدء منتج ==========
+  // ===== Start product =====
   if (msg.content.startsWith("*product")) {
-    sessions.set(userId, { step: "awaitingText", text: "" });
-    return msg.reply("📌 **ارسل نص المنتج (العنوان + الأقسام + PRICE: x)**");
+    sessions.set(userId, { step: "awaitText", text: "" });
+    return msg.reply("📌 **ارسل نص المنتج الآن (العنوان + الأقسام + PRICE: x)**");
   }
 
+  // لا يوجد جلسة → تجاهل
   if (!session) return;
 
-  // ========== استقبال النص ==========
-  if (session.step === "awaitingText") {
+  // ===== Step 1 — Receiving text =====
+  if (session.step === "awaitText") {
     session.text = msg.content;
-    session.step = "awaitingImageLink";
+    session.step = "awaitImageLink";
     sessions.set(userId, session);
 
     return msg.reply("📸 **تمام! الآن ارسل رابط صورة المنتج فقط**");
   }
 
-  // ========== استقبال رابط الصورة ==========
-  if (session.step === "awaitingImageLink") {
+  // ===== Step 2 — Receiving image URL =====
+  if (session.step === "awaitImageLink") {
 
-    let imageUrl = msg.content.trim();
+    const imageUrl = msg.content.trim();
 
-    // هل الرابط يبدأ بـ http ؟
+    // لازم يكون رابط
     if (!imageUrl.startsWith("http")) {
-      return msg.reply("⚠️ **ارسل رابط صورة صحيح يبدأ بـ http**");
+      return msg.reply("⚠️ **ارسل رابط صحيح يبدأ بـ http**");
     }
 
     // انتهت الجلسة
     sessions.delete(userId);
 
-    // ========== معالجة النص ==========
-    const lines = session.text.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+    // معالجة النص
+    const lines = session.text.split("\n").map(t => t.trim()).filter(Boolean);
 
     const title = lines.shift() || "Unnamed Product";
 
     let price = "N/A";
     lines.forEach((l) => {
       if (l.toLowerCase().startsWith("price")) {
-        price = l.split(":")[1]?.trim();
+        price = l.split(":")[1]?.trim() || "N/A";
       }
     });
 
-    const cleanLines = lines.filter((l) => !l.toLowerCase().startsWith("price"));
+    const cleanLines = lines.filter(l => !l.toLowerCase().startsWith("price"));
 
     let sections = [];
     let current = null;
@@ -127,18 +126,22 @@ client.on("messageCreate", async (msg) => {
 
     if (current) sections.push(current);
 
+    // ===== Build embed =====
     const embed = new EmbedBuilder()
       .setColor("#8A2BE2")
       .setTitle(`🔥 ${title}`)
-      .setDescription(`════════════\n💰 **${price}** 💰\n════════════`);
+      .setDescription(
+        `════════════\n💰 **${price}** 💰\n════════════`
+      );
 
     sections.forEach(sec => {
       embed.addFields({
-        name: `### ${sec.title}`,
-        value: sec.items.join("\n")
+        name: `### ${sec.title || "بدون عنوان / Untitled"}`,
+        value: sec.items.length > 0 ? sec.items.join("\n") : "لا يوجد عناصر / No items"
       });
     });
 
+    // زر شراء
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setLabel("BUY NOW / شراء الآن")
@@ -146,6 +149,7 @@ client.on("messageCreate", async (msg) => {
         .setURL(`https://discord.com/channels/${msg.guild.id}/1439600517063118989`)
     );
 
+    // إرسال المنتج
     await msg.channel.send("@everyone @here");
 
     await msg.channel.send({
@@ -154,7 +158,7 @@ client.on("messageCreate", async (msg) => {
       files: [{ attachment: imageUrl, name: "product.png" }]
     });
 
-    return msg.reply("✅ **تم إرسال المنتج بالرابط بنجاح!**");
+    return msg.reply("✅ **تم إرسال المنتج بنجاح!**");
   }
 });
 
