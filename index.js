@@ -95,20 +95,30 @@ client.on("messageCreate", async (msg) => {
     return;
   }
 
-  // استقبال النص
+  // استقبال النص (بدون صورة)
   if (expectingText && msg.author.id === cachedAuthor && !msg.attachments.size) {
     cachedText = msg.content;
     expectingText = false;
     expectingImage = true;
 
-    msg.reply("📸 **تمام! الآن ارسل صورة المنتج**");
+    msg.reply("📸 **تمام! الآن ارسل صورة المنتج (أي صورة بدون نص)**");
     return;
   }
 
-  // استقبال الصورة
-  if (expectingImage && msg.author.id === cachedAuthor && msg.attachments.size > 0) {
+  // =============================
+  // استقبال الصورة — يقبل أي صورة
+  // =============================
+  if (expectingImage && msg.author.id === cachedAuthor) {
+
+    // لو ما فيه صورة → اطلب صورة فقط
+    if (!msg.attachments.size) {
+      msg.reply("⚠️ **ارسل صورة المنتج فقط، بدون نص.**");
+      return;
+    }
+
     expectingImage = false;
 
+    // رابط الصورة
     const image = msg.attachments.first().url;
 
     const lines = cachedText.split("\n").map(l => l.trim()).filter(l => l.length > 0);
@@ -117,6 +127,7 @@ client.on("messageCreate", async (msg) => {
 
     let price = "N/A";
 
+    // استخراج السعر
     lines.forEach((l) => {
       if (l.toLowerCase().startsWith("price")) {
         price = l.split(":")[1]?.trim() || "N/A";
@@ -141,6 +152,9 @@ client.on("messageCreate", async (msg) => {
 
     if (current) sections.push(current);
 
+    // =============================
+    // بناء الـ Embed
+    // =============================
     const embed = new EmbedBuilder()
       .setColor("#8A2BE2")
       .setTitle(`🔥 ${title}`)
@@ -155,6 +169,7 @@ client.on("messageCreate", async (msg) => {
       });
     });
 
+    // زر شراء عربي + إنجليزي
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setLabel("BUY NOW / شراء الآن")
@@ -162,6 +177,7 @@ client.on("messageCreate", async (msg) => {
         .setURL(`https://discord.com/channels/${msg.guild.id}/1439600517063118989`)
     );
 
+    // إرسال الرسالة
     await msg.channel.send("@everyone @here");
 
     await msg.channel.send({
