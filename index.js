@@ -31,14 +31,8 @@ const client = new Client({
 
 client.on("clientReady", () => console.log(`Logged in as ${client.user.tag}`));
 
-// ======================
-// USER SESSIONS
-// ======================
 const sessions = new Map();
 
-// ======================
-// MESSAGE HANDLER
-// ======================
 client.on("messageCreate", async (msg) => {
   if (msg.author.bot) return;
 
@@ -49,54 +43,46 @@ client.on("messageCreate", async (msg) => {
   if (msg.content.toLowerCase() === "*help") {
     const embed = new EmbedBuilder()
       .setColor("#00A0FF")
-      .setTitle("📘 HELP MENU")
+      .setTitle("HELP MENU")
       .setDescription("• `*product` لإنشاء منتج");
 
     return msg.channel.send({ embeds: [embed] });
   }
 
-  // START NEW PRODUCT
+  // START PRODUCT
   if (msg.content.startsWith("*product")) {
-    sessions.set(uid, { step: "awaitText", text: "" });
-    return msg.reply("📌 **ارسل نص المنتج الآن (العنوان + الأقسام + PRICE: x)**");
+    sessions.set(uid, { step: "text", text: "" });
+    return msg.reply("📌 **ارسل نص المنتج الآن (العنوان + PRICE + الأقسام)**");
   }
 
-  // NO SESSION → IGNORE
   if (!session) return;
 
-  // STEP 1 — GET PRODUCT TEXT
-  if (session.step === "awaitText") {
+  // STEP 1 — TEXT
+  if (session.step === "text") {
     session.text = msg.content;
-    session.step = "awaitImage";
+    session.step = "image";
     sessions.set(uid, session);
 
-    return msg.reply("📸 **ارسل صورة المنتج الآن — أي رسالة بعدها تُستخدم كصورة**");
+    return msg.reply("📸 **ارسل صورة المنتج الآن — أول صورة ترسلها راح نستخدمها**");
   }
 
-  // STEP 2 — GET IMAGE (ANY TYPE)
-  if (session.step === "awaitImage") {
+  // STEP 2 — IMAGE
+  if (session.step === "image") {
 
     let imageUrl;
 
-    // 🔥 لو أرسل صورة
+    // لو أرسل صورة → خذ رابطها من Discord
     if (msg.attachments.size > 0) {
       imageUrl = msg.attachments.first().url;
-    }
-    // 🔥 لو أرسل رابط أو نص
-    else {
-      imageUrl = msg.content.trim();
+    } else {
+      return msg.reply("⚠️ **لازم ترسل صورة. جرب الآن.**");
     }
 
-    if (!imageUrl) {
-      return msg.reply("⚠️ **لم يتم العثور على صورة — ارسل صورة الآن**");
-    }
-
-    // REMOVE SESSION
     sessions.delete(uid);
 
-    // =====================================
+    // ======================
     // PARSE PRODUCT TEXT
-    // =====================================
+    // ======================
     const lines = session.text.split("\n").map(l => l.trim()).filter(Boolean);
 
     const title = lines.shift() || "Unnamed Product";
@@ -126,23 +112,22 @@ client.on("messageCreate", async (msg) => {
 
     if (current) sections.push(current);
 
-    // =====================================
+    // ======================
     // BUILD EMBED
-    // =====================================
+    // ======================
     const embed = new EmbedBuilder()
       .setColor("#8A2BE2")
       .setTitle(`🔥 ${title}`)
-      .setDescription(`════════════\n💰 **${price}** 💰\n════════════`)
-      .setImage(imageUrl);
+      .setDescription(`💰 **${price}**`)
+      .setImage(imageUrl); // ← هنا القوة 🔥🔥🔥
 
     sections.forEach(sec => {
       embed.addFields({
-        name: `### ${sec.title || "بدون عنوان"}`,
+        name: sec.title || "بدون عنوان",
         value: sec.items.length > 0 ? sec.items.join("\n") : "لا يوجد عناصر"
       });
     });
 
-    // BUY BUTTON
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setLabel("BUY NOW / شراء الآن")
@@ -150,7 +135,6 @@ client.on("messageCreate", async (msg) => {
         .setURL(`https://discord.com/channels/${msg.guild.id}/1439600517063118989`)
     );
 
-    // SEND PRODUCT
     await msg.channel.send("@everyone @here");
 
     await msg.channel.send({
