@@ -73,28 +73,40 @@ client.on("messageCreate", async (msg) => {
 
   if (!session) return;
 
-  // STEP 1 — PRODUCT TEXT
+  // STEP 1 — TEXT
   if (session.step === "awaitText") {
     session.text = msg.content;
-    session.step = "awaitImageLink";
+    session.step = "awaitImage";
     sessions.set(userId, session);
 
-    return msg.reply("📸 **ارسل رابط صورة المنتج الآن**");
+    return msg.reply("📸 **ارسل صورة المنتج الآن — أي رسالة ترسلها الحين يعتبرها صورة**");
   }
 
-  // STEP 2 — IMAGE LINK
-  if (session.step === "awaitImageLink") {
+  // STEP 2 — IMAGE AUTO-DETECT
+  if (session.step === "awaitImage") {
 
-    // نقبل أي شيء كنص دون قيود
-    const imageUrl = msg.content.trim();
+    let imageUrl;
 
-    if (!imageUrl || imageUrl.length < 5) {
-      return msg.reply("⚠️ **الرابط غير صالح**");
+    // 🔥 إذا فيه صورة فعلية
+    if (msg.attachments.size > 0) {
+      imageUrl = msg.attachments.first().url;
     }
 
-    // Session finished
+    // 🔥 إذا ما فيه صورة، خذ الرسالة نفسها (نص / رابط)
+    else {
+      imageUrl = msg.content.trim();
+    }
+
+    if (!imageUrl) {
+      return msg.reply("⚠️ **لم يتم العثور على صورة — ارسلها الآن**");
+    }
+
+    // انتهت الجلسة
     sessions.delete(userId);
 
+    // =============================
+    // معالجة نص المنتج
+    // =============================
     const lines = session.text.split("\n").map(l => l.trim()).filter(Boolean);
 
     const title = lines.shift() || "Unnamed Product";
@@ -124,7 +136,9 @@ client.on("messageCreate", async (msg) => {
 
     if (current) sections.push(current);
 
-    // Embed
+    // =============================
+    // بناء الـ Embed
+    // =============================
     const embed = new EmbedBuilder()
       .setColor("#8A2BE2")
       .setTitle(`🔥 ${title}`)
@@ -137,7 +151,7 @@ client.on("messageCreate", async (msg) => {
       });
     });
 
-    // BUY Button
+    // زر شراء
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setLabel("BUY NOW / شراء الآن")
@@ -145,14 +159,15 @@ client.on("messageCreate", async (msg) => {
         .setURL(`https://discord.com/channels/${msg.guild.id}/1439600517063118989`)
     );
 
-    // SEND PRODUCT
+    // =============================
+    // إرسال المنتج
+    // =============================
     await msg.channel.send("@everyone @here");
 
-    // ⚡ هذا أهم تعديل — قبول مسار /mnt/data مباشرة
     await msg.channel.send({
       embeds: [embed],
       components: [row],
-      files: [ imageUrl ]   // ← هنا القوة
+      files: [ imageUrl ]   // 🔥 يقبل أي رابط أو صورة تلقائياً
     });
 
     return msg.reply("✅ **تم إرسال المنتج بنجاح!**");
