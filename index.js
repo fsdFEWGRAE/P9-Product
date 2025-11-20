@@ -10,21 +10,16 @@ import {
 import express from "express";
 
 // ======================
-// Express Server for Render
+// EXPRESS SERVER (FOR RENDER)
 // ======================
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.get("/", (req, res) => {
-  res.send("Bot is running!");
-});
-
-app.listen(PORT, () => {
-  console.log(`HTTP server running on port ${PORT}`);
-});
+app.get("/", (req, res) => res.send("Bot is running"));
+app.listen(PORT, () => console.log(`HTTP server on ${PORT}`));
 
 // ======================
-// Discord Bot
+// DISCORD CLIENT
 // ======================
 const client = new Client({
   intents: [
@@ -34,85 +29,80 @@ const client = new Client({
   ]
 });
 
-client.once("clientReady", () => {
-  console.log(`Bot logged in as ${client.user.tag}`);
-});
+client.on("clientReady", () => console.log(`Logged in as ${client.user.tag}`));
 
-// =============================
-// جلسات لكل مستخدم
-// =============================
+// ======================
+// USER SESSIONS
+// ======================
 const sessions = new Map();
 
-// =============================
-// messageCreate
-// =============================
+// ======================
+// MESSAGE HANDLER
+// ======================
 client.on("messageCreate", async (msg) => {
   if (msg.author.bot) return;
 
-  const userId = msg.author.id;
-  const session = sessions.get(userId);
+  const uid = msg.author.id;
+  const session = sessions.get(uid);
 
   // HELP
   if (msg.content.toLowerCase() === "*help") {
     const embed = new EmbedBuilder()
       .setColor("#00A0FF")
       .setTitle("📘 HELP MENU")
-      .addFields({
-        name: "🔥 Product System",
-        value: "`*product` — إرسال منتج"
-      });
+      .setDescription("• `*product` لإنشاء منتج");
 
     return msg.channel.send({ embeds: [embed] });
   }
 
-  // START PRODUCT
+  // START NEW PRODUCT
   if (msg.content.startsWith("*product")) {
-    sessions.set(userId, { step: "awaitText", text: "" });
+    sessions.set(uid, { step: "awaitText", text: "" });
     return msg.reply("📌 **ارسل نص المنتج الآن (العنوان + الأقسام + PRICE: x)**");
   }
 
+  // NO SESSION → IGNORE
   if (!session) return;
 
-  // STEP 1 — TEXT
+  // STEP 1 — GET PRODUCT TEXT
   if (session.step === "awaitText") {
     session.text = msg.content;
     session.step = "awaitImage";
-    sessions.set(userId, session);
+    sessions.set(uid, session);
 
-    return msg.reply("📸 **ارسل صورة المنتج الآن — أي رسالة ترسلها الحين يعتبرها صورة**");
+    return msg.reply("📸 **ارسل صورة المنتج الآن — أي رسالة بعدها تُستخدم كصورة**");
   }
 
-  // STEP 2 — IMAGE AUTO-DETECT
+  // STEP 2 — GET IMAGE (ANY TYPE)
   if (session.step === "awaitImage") {
 
     let imageUrl;
 
-    // 🔥 إذا فيه صورة فعلية
+    // 🔥 لو أرسل صورة
     if (msg.attachments.size > 0) {
       imageUrl = msg.attachments.first().url;
     }
-
-    // 🔥 إذا ما فيه صورة، خذ الرسالة نفسها (نص / رابط)
+    // 🔥 لو أرسل رابط أو نص
     else {
       imageUrl = msg.content.trim();
     }
 
     if (!imageUrl) {
-      return msg.reply("⚠️ **لم يتم العثور على صورة — ارسلها الآن**");
+      return msg.reply("⚠️ **لم يتم العثور على صورة — ارسل صورة الآن**");
     }
 
-    // انتهت الجلسة
-    sessions.delete(userId);
+    // REMOVE SESSION
+    sessions.delete(uid);
 
-    // =============================
-    // معالجة نص المنتج
-    // =============================
+    // =====================================
+    // PARSE PRODUCT TEXT
+    // =====================================
     const lines = session.text.split("\n").map(l => l.trim()).filter(Boolean);
 
     const title = lines.shift() || "Unnamed Product";
 
     let price = "N/A";
-    lines.forEach((l) => {
+    lines.forEach(l => {
       if (l.toLowerCase().startsWith("price")) {
         price = l.split(":")[1]?.trim() || "N/A";
       }
@@ -136,13 +126,14 @@ client.on("messageCreate", async (msg) => {
 
     if (current) sections.push(current);
 
-    // =============================
-    // بناء الـ Embed
-    // =============================
+    // =====================================
+    // BUILD EMBED
+    // =====================================
     const embed = new EmbedBuilder()
       .setColor("#8A2BE2")
       .setTitle(`🔥 ${title}`)
-      .setDescription(`════════════\n💰 **${price}** 💰\n════════════`);
+      .setDescription(`════════════\n💰 **${price}** 💰\n════════════`)
+      .setImage(imageUrl);
 
     sections.forEach(sec => {
       embed.addFields({
@@ -151,7 +142,7 @@ client.on("messageCreate", async (msg) => {
       });
     });
 
-    // زر شراء
+    // BUY BUTTON
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setLabel("BUY NOW / شراء الآن")
@@ -159,15 +150,12 @@ client.on("messageCreate", async (msg) => {
         .setURL(`https://discord.com/channels/${msg.guild.id}/1439600517063118989`)
     );
 
-    // =============================
-    // إرسال المنتج
-    // =============================
+    // SEND PRODUCT
     await msg.channel.send("@everyone @here");
 
     await msg.channel.send({
       embeds: [embed],
-      components: [row],
-      files: [ imageUrl ]   // 🔥 يقبل أي رابط أو صورة تلقائياً
+      components: [row]
     });
 
     return msg.reply("✅ **تم إرسال المنتج بنجاح!**");
