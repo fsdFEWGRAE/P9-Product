@@ -41,16 +41,10 @@ client.on("ready", () => {
 // =============================
 // نظام الجلسات لكل مستخدم
 // =============================
-/*
- session = {
-   step: 'awaitingText' | 'awaitingImage',
-   text: 'النص الكامل اللي ارسله'
- }
-*/
 const sessions = new Map();
 
 // =============================
-// messageCreate واحد لكل الأوامر
+// messageCreate الرئيسي
 // =============================
 client.on("messageCreate", async (msg) => {
   if (msg.author.bot) return;
@@ -58,102 +52,66 @@ client.on("messageCreate", async (msg) => {
   const userId = msg.author.id;
   const session = sessions.get(userId);
 
-  // ========== أمر help ==========
+  // ========== help ==========
   if (msg.content.toLowerCase() === "*help") {
     const helpEmbed = new EmbedBuilder()
       .setColor("#00A0FF")
       .setTitle("📘 HELP MENU — قائمة المساعدة")
-      .setDescription("**Bot Commands / أوامر البوت**")
       .addFields(
         {
-          name: "🔥 Product System / نظام المنتجات",
-          value:
-            "`*product`\n" +
-            "إرسال منتج مع صورة + سعر + زر شراء\n" +
-            "Send product with image + price + buy button"
-        },
-        {
-          name: "⚙️ Developer Tools / أدوات المطور",
-          value:
-            "`*help`\n" +
-            "عرض قائمة الأوامر\n" +
-            "Show help menu"
+          name: "🔥 Products",
+          value: "`*product` — إرسال منتج بالرابط والصورة"
         }
-      )
-      .setFooter({ text: "P9 Store – Help System" });
+      );
 
-    await msg.channel.send({ embeds: [helpEmbed] });
-    return;
+    return msg.channel.send({ embeds: [helpEmbed] });
   }
 
-  // ========== خطوة 1: بدء منتج جديد ==========
+  // ========== بدء منتج ==========
   if (msg.content.startsWith("*product")) {
     sessions.set(userId, { step: "awaitingText", text: "" });
-    await msg.reply("📌 **ارسل نص المنتج الآن (العنوان + الأقسام + PRICE: x)**");
-    return;
+    return msg.reply("📌 **ارسل نص المنتج (العنوان + الأقسام + PRICE: x)**");
   }
 
-  // لو ما فيه جلسة ولا أمر → تجاهل
   if (!session) return;
 
-  // ========== خطوة 2: استقبال النص ==========
+  // ========== استقبال النص ==========
   if (session.step === "awaitingText") {
-    // نتأكد انها رسالة بدون صور
-    if (msg.attachments.size > 0) {
-      await msg.reply("⚠️ **ارسِل نص المنتج فقط بدون صورة، بعدين بنطلب منك الصورة.**");
-      return;
-    }
-
     session.text = msg.content;
-    session.step = "awaitingImage";
+    session.step = "awaitingImageLink";
     sessions.set(userId, session);
 
-    await msg.reply("📸 **تمام! الآن ارسل صورة المنتج (أي صورة بدون نص)**");
-    return;
+    return msg.reply("📸 **تمام! الآن ارسل رابط صورة المنتج فقط**");
   }
 
-  // ========== خطوة 3: استقبال الصورة ==========
-  if (session.step === "awaitingImage") {
-    // لازم يكون فيه مرفقات
-    if (msg.attachments.size === 0) {
-      await msg.reply("⚠️ **ما استقبلت صورة، ارسل صورة المنتج بدون نص.**");
-      return;
+  // ========== استقبال رابط الصورة ==========
+  if (session.step === "awaitingImageLink") {
+
+    let imageUrl = msg.content.trim();
+
+    // هل الرابط يبدأ بـ http ؟
+    if (!imageUrl.startsWith("http")) {
+      return msg.reply("⚠️ **ارسل رابط صورة صحيح يبدأ بـ http**");
     }
 
-    // ناخذ أول صورة من المرفقات
-    const firstAttachment = msg.attachments.first();
-    const imageUrl = firstAttachment?.url;
-
-    if (!imageUrl) {
-      await msg.reply("⚠️ **تعذر قراءة رابط الصورة، جرّب ترفعها مرة ثانية.**");
-      return;
-    }
-
-    // نحذف الجلسة خلاص
+    // انتهت الجلسة
     sessions.delete(userId);
 
-    // =============================
-    // معالجة نص المنتج
-    // =============================
-    const lines = session.text
-      .split("\n")
-      .map((l) => l.trim())
-      .filter((l) => l.length > 0);
+    // ========== معالجة النص ==========
+    const lines = session.text.split("\n").map(l => l.trim()).filter(l => l.length > 0);
 
-    const title = lines.shift() || "Unnamed Product"; // أول سطر = العنوان
+    const title = lines.shift() || "Unnamed Product";
 
     let price = "N/A";
     lines.forEach((l) => {
       if (l.toLowerCase().startsWith("price")) {
-        price = l.split(":")[1]?.trim() || "N/A";
+        price = l.split(":")[1]?.trim();
       }
     });
 
-    // نحذف سطر السعر من باقي المعالجة
     const cleanLines = lines.filter((l) => !l.toLowerCase().startsWith("price"));
 
-    // تقسيم الأقسام حسب ---
-    const sections = [];
+    let sections = [];
     let current = null;
 
     cleanLines.forEach((line) => {
@@ -161,30 +119,26 @@ client.on("messageCreate", async (msg) => {
         if (current) sections.push(current);
         current = { title: "", items: [] };
       } else if (current && current.title === "") {
-        current.title = line; // أول سطر بعد الخط = عنوان قسم
+        current.title = line;
       } else if (current) {
-        current.items.push("• " + line); // باقي الأسطر نقاط
+        current.items.push("• " + line);
       }
     });
 
     if (current) sections.push(current);
 
-    // =============================
-    // بناء الـ Embed
-    // =============================
     const embed = new EmbedBuilder()
       .setColor("#8A2BE2")
       .setTitle(`🔥 ${title}`)
       .setDescription(`════════════\n💰 **${price}** 💰\n════════════`);
 
-    sections.forEach((sec) => {
+    sections.forEach(sec => {
       embed.addFields({
         name: `### ${sec.title}`,
-        value: sec.items.join("\n") || "No details"
+        value: sec.items.join("\n")
       });
     });
 
-    // زر شراء عربي + إنجليزي
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setLabel("BUY NOW / شراء الآن")
@@ -192,9 +146,6 @@ client.on("messageCreate", async (msg) => {
         .setURL(`https://discord.com/channels/${msg.guild.id}/1439600517063118989`)
     );
 
-    // =============================
-    // إرسال المنتج
-    // =============================
     await msg.channel.send("@everyone @here");
 
     await msg.channel.send({
@@ -203,8 +154,7 @@ client.on("messageCreate", async (msg) => {
       files: [{ attachment: imageUrl, name: "product.png" }]
     });
 
-    await msg.reply("✅ **تم إرسال المنتج بالشكل المطلوب!**");
-    return;
+    return msg.reply("✅ **تم إرسال المنتج بالرابط بنجاح!**");
   }
 });
 
