@@ -54,8 +54,8 @@ function extractImage(msg) {
     return msg.content.trim();
   }
 
-  // 4 — أي شيء ثاني نخليه رابط صورة افتراضية
-  return "https://i.imgur.com/3ZUrjUP.png"; // صورة افتراضية
+  // 4 — صورة افتراضية
+  return "https://i.imgur.com/3ZUrjUP.png";
 }
 
 // ===========================================
@@ -74,8 +74,8 @@ client.on("messageCreate", async (msg) => {
 
   // START PRODUCT
   if (msg.content.startsWith("*product")) {
-    sessions.set(uid, { step: "text", text: "" });
-    return msg.reply("📌 **أرسل نص المنتج الآن**");
+    sessions.set(uid, { step: "text", text: "", image: "", prices: "" });
+    return msg.reply("📌 **أرسل نص المنتج الآن (العنوان + الأقسام فقط)**");
   }
 
   // لا يوجد جلسة → تجاهل
@@ -86,37 +86,57 @@ client.on("messageCreate", async (msg) => {
     session.text = msg.content;
     session.step = "image";
     sessions.set(uid, session);
-    return msg.reply("📸 **أرسل صورة المنتج الآن — أي شيء ترسله يستخدم كصورة**");
+    return msg.reply("📸 **أرسل صورة المنتج الآن — أي رسالة بعدها تُستخدم كصورة**");
   }
 
   // ============= STEP 2 (IMAGE) =============
   if (session.step === "image") {
 
-    const imageUrl = extractImage(msg); // ← هنا السحر 🔥🔥🔥
+    const image = extractImage(msg);
+    if (!image) return msg.reply("⚠️ **ارسل صورة الآن**");
 
-    sessions.delete(uid);
+    session.image = image;
+    session.step = "prices";
+    sessions.set(uid, session);
 
-    // تحليل النص
-    const lines = session.text.split("\n").map(l => l.trim()).filter(Boolean);
-    const title = lines.shift() || "منتج";
-    
-    let price = "N/A";
-    lines.forEach(l => {
-      if (l.toLowerCase().startsWith("price")) {
-        price = l.split(":")[1]?.trim() || "N/A";
-      }
+    return msg.reply("💰 **ارسل الأسعار الآن (كل سطر سعر)**\nمثال:\nday 4\n3 days 6.5\nweek 10");
+  }
+
+  // ============= STEP 3 (PRICES MULTI) =============
+  if (session.step === "prices") {
+
+    const rawPrices = msg.content.split("\n").map(l => l.trim()).filter(Boolean);
+
+    let priceLines = [];
+    rawPrices.forEach(line => {
+      const parts = line.split(" ");
+      const label = parts.slice(0, -1).join(" "); 
+      const value = parts.slice(-1)[0];
+      priceLines.push(`🔮 **${label}** ➜ ${value}$`);
     });
 
-    const desc = lines.filter(l => !l.toLowerCase().startsWith("price")).join("\n");
+    session.prices = priceLines.join("\n");
 
-    // EMBED
+    // الآن نرسل المنتج
+    const lines = session.text.split("\n").map(l => l.trim()).filter(Boolean);
+    const title = lines.shift() || "منتج";
+
+    const desc = lines.join("\n");
+
+    // 🟣 ULTRA 3D PRICE BOX 🔥🔥🔥
+    const priceUltra =
+"██████▓▓▒▒░░ ✦✦✦  𝙐𝙇𝙏𝙍𝘼 𝙂𝙇𝙊𝙒 𝙋𝙍𝙄𝘾𝙀𝙎  ✦✦✦ ░░▒▒▓▓██████\n" +
+"▓████▇▆▅▄ ✦✦ 𝙋𝙐𝙍𝙋𝙇𝙀 → 𝘽𝙇𝘼𝘾𝙆 𝙂𝙍𝘼𝘿𝙄𝙀𝙉𝙏 ✦✦ ▄▅▆▇████▓\n\n" +
+session.prices + "\n\n" +
+"▓████▇▆▅▄ ✦✦  𝙐𝙇𝙏𝙍𝘼 𝟑𝘿 𝙋𝙐𝙇𝙎𝙀  ✦✦ ▄▅▆▇████▓\n" +
+"██████▓▓▒▒░░ ✦✦✦  𝙑𝙄𝙊𝙇𝙀𝙏 𝙎𝙃𝘼𝘿𝙀 ✦✦✦ ░░▒▒▓▓██████";
+
     const embed = new EmbedBuilder()
-      .setColor("#8A2BE2")
+      .setColor("#4B0082") // Ultra Purple
       .setTitle(`🔥 ${title}`)
-      .setDescription(`💰 **${price}**\n\n${desc}`)
-      .setImage(imageUrl);
+      .setDescription(priceUltra + "\n\n" + desc)
+      .setImage(session.image);
 
-    // BUTTON
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setLabel("BUY NOW / شراء الآن")
@@ -124,15 +144,14 @@ client.on("messageCreate", async (msg) => {
         .setURL(`https://discord.com/channels/${msg.guild.id}/1439600517063118989`)
     );
 
-    await msg.channel.send("@everyone @here");
+    sessions.delete(uid);
 
-    await msg.channel.send({
-      embeds: [embed],
-      components: [row]
-    });
+    await msg.channel.send("@everyone @here");
+    await msg.channel.send({ embeds: [embed], components: [row] });
 
     return msg.reply("✅ **تم إرسال المنتج بنجاح!**");
   }
+
 });
 
 client.login(process.env.TOKEN);
