@@ -39,12 +39,12 @@ client.once("clientReady", () => {
 });
 
 // =============================
-// جلسات المستخدمين
+// جلسات لكل مستخدم
 // =============================
 const sessions = new Map();
 
 // =============================
-// messageCreate
+// listener واحد
 // =============================
 client.on("messageCreate", async (msg) => {
   if (msg.author.bot) return;
@@ -52,52 +52,51 @@ client.on("messageCreate", async (msg) => {
   const userId = msg.author.id;
   const session = sessions.get(userId);
 
-  // ===== HELP =====
+  // HELP
   if (msg.content.toLowerCase() === "*help") {
     const embed = new EmbedBuilder()
       .setColor("#00A0FF")
-      .setTitle("📘 HELP MENU — قائمة المساعدة")
+      .setTitle("📘 HELP MENU")
       .addFields({
         name: "🔥 Product System",
-        value: "`*product` — إرسال منتج بالرابط والصورة"
+        value: "`*product` — إرسال منتج"
       });
 
     return msg.channel.send({ embeds: [embed] });
   }
 
-  // ===== Start product =====
+  // START PRODUCT
   if (msg.content.startsWith("*product")) {
     sessions.set(userId, { step: "awaitText", text: "" });
     return msg.reply("📌 **ارسل نص المنتج الآن (العنوان + الأقسام + PRICE: x)**");
   }
 
-  // لا يوجد جلسة → تجاهل
   if (!session) return;
 
-  // ===== Step 1 — Receiving text =====
+  // ========== STEP 1 TEXT ==========
   if (session.step === "awaitText") {
     session.text = msg.content;
     session.step = "awaitImageLink";
     sessions.set(userId, session);
 
-    return msg.reply("📸 **تمام! الآن ارسل رابط صورة المنتج فقط**");
+    return msg.reply("📸 **ارسل رابط صورة المنتج الآن**");
   }
 
-  // ===== Step 2 — Receiving image URL =====
+  // ========== STEP 2 IMAGE LINK ==========
   if (session.step === "awaitImageLink") {
 
+    // ⚡ نقبل أي نص كصورة (حسب نظام /mnt/data)
     const imageUrl = msg.content.trim();
 
-    // لازم يكون رابط
-    if (!imageUrl.startsWith("http")) {
-      return msg.reply("⚠️ **ارسل رابط صحيح يبدأ بـ http**");
+    if (!imageUrl || imageUrl.length < 5) {
+      return msg.reply("⚠️ **الرابط غير صالح**");
     }
 
-    // انتهت الجلسة
+    //Session done
     sessions.delete(userId);
 
     // معالجة النص
-    const lines = session.text.split("\n").map(t => t.trim()).filter(Boolean);
+    const lines = session.text.split("\n").map(l => l.trim()).filter(Boolean);
 
     const title = lines.shift() || "Unnamed Product";
 
@@ -108,12 +107,14 @@ client.on("messageCreate", async (msg) => {
       }
     });
 
+    // حذف السطر اللي فيه PRICE
     const cleanLines = lines.filter(l => !l.toLowerCase().startsWith("price"));
 
+    // الأقسام
     let sections = [];
     let current = null;
 
-    cleanLines.forEach((line) => {
+    cleanLines.forEach(line => {
       if (line.startsWith("---")) {
         if (current) sections.push(current);
         current = { title: "", items: [] };
@@ -126,18 +127,16 @@ client.on("messageCreate", async (msg) => {
 
     if (current) sections.push(current);
 
-    // ===== Build embed =====
+    // بناء الـ Embed
     const embed = new EmbedBuilder()
       .setColor("#8A2BE2")
       .setTitle(`🔥 ${title}`)
-      .setDescription(
-        `════════════\n💰 **${price}** 💰\n════════════`
-      );
+      .setDescription(`════════════\n💰 **${price}** 💰\n════════════`);
 
     sections.forEach(sec => {
       embed.addFields({
-        name: `### ${sec.title || "بدون عنوان / Untitled"}`,
-        value: sec.items.length > 0 ? sec.items.join("\n") : "لا يوجد عناصر / No items"
+        name: `### ${sec.title || "بدون عنوان"}`,
+        value: sec.items.length > 0 ? sec.items.join("\n") : "لا يوجد عناصر"
       });
     });
 
