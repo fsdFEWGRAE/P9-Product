@@ -145,7 +145,7 @@ session.prices
       new ButtonBuilder()
         .setLabel("BUY NOW / شراء الآن")
         .setStyle(ButtonStyle.Link)
-        .setURL(`https://discord.com/channels/${msg.guild.id}/1439600517063118989`)
+        .setURL(`https://discord.com/channels/${msg.guild.id}/1442766452552634389`)
     );
 
     sessions.delete(uid);
@@ -159,3 +159,4 @@ session.prices
 });
 
 client.login(process.env.TOKEN);
+
